@@ -1,0 +1,129 @@
+#!/usr/bin/env python3
+
+from i3ipc import Event, Connection
+
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Helper command
+def command(c, a, text, b=""):
+    if b != "":
+        b = b.id
+    c.command(f"[con_id={a.id}] {text} {b}")
+
+def grab_focused_window(c):
+    tree = c.get_tree()
+    focused_window = tree.find_focused()
+    return focused_window
+
+def get_master(con):
+    workspace_nodes = con.workspace().nodes
+    if len(workspace_nodes) > 0:
+        master = workspace_nodes[0]
+        return master 
+    return None 
+
+def get_stack(con):
+    workspace_nodes = con.workspace().nodes
+    if len(workspace_nodes) > 0:
+        stack = workspace_nodes[-1]
+        return stack
+    return None 
+
+def set_stack_layout(c, stack):
+    if stack.layout != "splitv":
+        command(c, stack, "split vertical")
+        command(c, stack, "layout splitv")
+
+def stack_up(c, subject):
+    stack = get_stack(subject)
+    command(c, stack, "mark --add stack")
+    set_stack_layout(c, stack)
+    command(c, subject, "move container to mark stack")
+    command(c, stack, "unmark stack")
+
+def resize_master(c):
+    focused_window = grab_focused_window(c)
+    workspace = focused_window.workspace()
+    # Everytime there is only one stack window, master will resize
+    if len(workspace.nodes) == 2 and len(workspace.nodes[-1].descendants()) == 1:
+        command(c, get_master(focused_window), 'resize set 75ppt')
+
+def on_window_new(c, e):
+    new_window = grab_focused_window(c)
+
+    if new_window is None:
+        return
+
+    if len(new_window.nodes) > 1:
+        stack_up(c, new_window)
+
+    reestablish_layout(c, resize=True)
+
+def on_window_focus(c, e):
+    focused_window = grab_focused_window(c)
+
+    if focused_window is None:
+        return
+
+    workspace = focused_window.workspace()
+
+    reestablish_layout(c)
+
+
+def on_window_close(c, e):
+    focused_window = grab_focused_window(c)
+
+    if focused_window is None:
+        return
+
+    workspace = focused_window.workspace()
+
+# This functions makes sure the master-stack layout will always be organized
+def reestablish_layout(c, e=None, resize=False):
+    focused_window = grab_focused_window(c)
+
+    if focused_window is None:
+        return
+
+    workspace = focused_window.workspace()
+
+    # If master disappeared and there is only the stack, and if the stack have more than two windows, the last window will become master
+    if len(workspace.nodes) == 1 and len(workspace.nodes[0].descendants()) > 1:
+        last_descendant = workspace.nodes[0].descendants()[-1]
+        command(c, last_descendant, "move left")
+        command(c, last_descendant, "resize set 75ppt")
+
+    stack = get_stack(focused_window)
+    master = get_master(focused_window)
+
+    if len(workspace.nodes) < 2:
+        return
+    elif len(workspace.nodes) > 2:
+        for node in workspace.leaves():
+            if node == stack or node == master:
+                pass
+            else:
+                stack_up(c, node)
+    else:
+        set_stack_layout(c, stack)
+
+    if resize == True:
+        resize_master(c)
+
+
+def main():
+    c = Connection()
+    c.on(Event.WINDOW_FOCUS, on_window_focus)
+    c.on(Event.WINDOW_NEW, on_window_new)
+    c.on(Event.WINDOW_CLOSE, on_window_close)
+    c.on(Event.WINDOW_MOVE, reestablish_layout)
+
+    try:
+        c.main()
+    except BaseException as e:
+        logger.error("Exception occurred, restarting", exc_info=True)
+        main()
+
+main()

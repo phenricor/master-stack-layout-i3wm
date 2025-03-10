@@ -1,0 +1,29 @@
+# Starts master-layout
+exec --no-startup-id ./scripts/master-layout
+
+# Variables
+# ## Scripts
+set $swap exec --no-startup-id ./scripts/swap
+set $cycle-focus exec --no-startup-id ./scripts/cycle-focus
+set $cycle-move exec --no-startup-id ./scripts/cycle-move
+set $resize-compass exec --no-startup-id ./scripts/resize-compass
+## Keys
+set $left h
+set $down j
+set $up k
+set $right l
+
+# Focus movement
+bindsym $mod+$down $cycle-focus down
+bindsym $mod+$up $cycle-focus up
+bindsym $mod+$right $resize-compass right 5ppt
+bindsym $mod+$left $resize-compass left 5ppt
+
+bindsym $mod+Shift+$down $cycle-move down 
+bindsym $mod+Shift+$up $cycle-move up 
+
+# Master layout behaviours
+## Swap focused window with master
+bindsym $mod+Return $swap
+## Focus on moster
+bindsym $mod+Shift+p exec swaymsg focus left
